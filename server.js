@@ -83,7 +83,8 @@ app.post('/api/analyze', authenticate, async (req, res) => {
 
     // เช็คโควตา
     db.get(`SELECT usage_daily, limit_daily FROM users WHERE id = ?`, [userId], async (err, row) => {
-        if (row.usage_daily >= row.limit_daily) {
+       if (!row) return res.status(401).json({ error: "User not found, please login again" });
+       if (row.usage_daily >= row.limit_daily) {
             return res.status(429).json({ error: "โควตาการใช้งานวันนี้เต็มแล้ว (Limit Exceeded)" });
         }
 
