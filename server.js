@@ -90,7 +90,7 @@ app.post('/api/analyze', authenticate, async (req, res) => {
 
         try {
             // เรียก Google Gemini
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001"}); // ใช้รุ่น 1.5 Flash (เร็วและถูก)
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"}); // ใช้รุ่น 1.5 Flash (เร็วและถูก)
             
             let result;
             if (imageBase64) {
