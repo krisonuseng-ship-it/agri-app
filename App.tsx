@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 // ==========================================
-// 1. Interfaces & Types
+// 1. Interfaces & Types (โครงสร้างข้อมูล)
 // ==========================================
 interface AnalysisResult {
   feasibility_check: { is_possible: boolean; status_title: string; reason: string };
@@ -53,7 +53,14 @@ interface AnalysisResult {
   transplant_advice: { needed: boolean; trigger: string; method: string };
   env_summary: { temp: string; light: string };
   soil_summary: string;
-  soil_adjustment_detailed: string; 
+  soil_adjustment_detailed: string;
+  
+  // ข้อมูลสำหรับตัวอักษรวิ่ง (Real-time Ticker)
+  real_time_data: {
+      market_price: string;
+      weather_now: string;
+      soil_insight: string;
+  };
 }
 
 interface User {
@@ -66,7 +73,7 @@ interface User {
 }
 
 // ==========================================
-// 2. Simple Charts
+// 2. Simple Charts (กราฟแสดงผล)
 // ==========================================
 const SimplePieChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
   const total = data.reduce((acc, cur) => acc + cur.value, 0);
@@ -108,7 +115,7 @@ const SimpleBarChart = ({ users }: { users: User[] }) => {
 };
 
 // ==========================================
-// 3. Translations
+// 3. Translations (ภาษาไทย/อังกฤษ/จีน)
 // ==========================================
 const translations = {
   th: {
@@ -116,7 +123,7 @@ const translations = {
     username: "ชื่อผู้ใช้", password: "รหัสผ่าน",
     plant: "ชื่อพืช", region: "จังหวัด/พื้นที่", country: "ประเทศ",
     env: "สภาพแวดล้อม", system: "ระบบปลูก",
-    analyzeBtn: "วิเคราะห์ระดับปรมาจารย์ (Master Analysis)", analyzing: "กำลังเขียนตำราปลูกอย่างละเอียด...",
+    analyzeBtn: "วิเคราะห์ระดับปรมาจารย์ (Master Analysis)", analyzing: "กำลังดึงข้อมูลตลาดและวิเคราะห์...",
     upload: "อัปโหลดรูป", imgSelected: "เลือกรูปแล้ว",
     print: "พิมพ์รายงาน", export: "บันทึกไฟล์", qr: "สร้าง QR Code",
     logout: "ออกจากระบบ", adminPanel: "ระบบจัดการ (Admin)", appView: "หน้าใช้งาน",
@@ -129,14 +136,15 @@ const translations = {
     deepProp: "ศาสตร์การขยายพันธุ์", timeline: "ปฏิทินการปลูก (Master Timeline)", resilience: "ความทนทาน",
     transplant: "เทคนิคการย้ายปลูก", disease: "การวินิจฉัยและรักษาโรค (ละเอียด)",
     seedPrep: "การเตรียมเมล็ด/ต้นพันธุ์", method: "เทคนิคหลัก", steps: "ขั้นตอนปฏิบัติ",
-    soilAdj: "การปรับปรุงโครงสร้างดิน"
+    soilAdj: "การปรับปรุงโครงสร้างดิน",
+    market: "ราคาตลาดปัจจุบัน", weather: "สภาพอากาศ", soilInfo: "ข้อมูลดิน"
   },
   en: {
     title: "Agri Goal AI Pro (Yanapanya)", login: "Login", register: "Register",
     username: "Username", password: "Password",
     plant: "Plant Name", region: "Region", country: "Country",
     env: "Environment", system: "System",
-    analyzeBtn: "Master Analysis", analyzing: "Creating Master Plan...",
+    analyzeBtn: "Master Analysis", analyzing: "Fetching Market Data...",
     upload: "Upload Image", imgSelected: "Image Selected",
     print: "Print Report", export: "Save Text", qr: "Get QR Code",
     logout: "Logout", adminPanel: "Admin Panel", appView: "App View",
@@ -149,7 +157,8 @@ const translations = {
     deepProp: "Deep Propagation", timeline: "Master Timeline", resilience: "Resilience",
     transplant: "Transplanting", disease: "Detailed Disease Diagnosis",
     seedPrep: "Seed Preparation", method: "Core Technique", steps: "Detailed Steps",
-    soilAdj: "Soil Remediation"
+    soilAdj: "Soil Remediation",
+    market: "Market Price", weather: "Weather", soilInfo: "Soil Info"
   },
   zh: {
     title: "Agri Goal AI Pro (Yanapanya)", login: "登录", register: "注册",
@@ -169,13 +178,15 @@ const translations = {
     deepProp: "繁殖", timeline: "时间表", resilience: "抗性",
     transplant: "移栽", disease: "病害检测",
     seedPrep: "种子处理", method: "方法", steps: "步骤",
-    soilAdj: "土壤改良"
+    soilAdj: "土壤改良",
+    market: "市场价格", weather: "天气", soilInfo: "土壤信息"
   }
 };
 
 const API_URL = 'http://localhost:3000/api';
 
 const App: React.FC = () => {
+  // --- State ---
   const [lang, setLang] = useState<'th' | 'en' | 'zh'>('th');
   const t = translations[lang];
 
@@ -204,6 +215,7 @@ const App: React.FC = () => {
   const [showQR, setShowQR] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Functions ---
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true); setAuthMsg('');
@@ -236,79 +248,43 @@ const App: React.FC = () => {
     }
   };
 
-  // *** SUPER DETAILED PROMPT (Yanapanya + Master Class) ***
+  // *** PROMPT: สั่ง AI ให้วิเคราะห์ละเอียดและประเมินราคาตลาด ***
   const constructPrompt = () => {
     const targetLang = lang === 'th' ? 'Thai (ภาษาไทย)' : lang === 'zh' ? 'Chinese' : 'English';
     return `
-      Role: Grandmaster Agricultural Scientist & Soil Expert (Yanapanya Method).
+      Role: Grandmaster Agricultural Scientist (Yanapanya Method).
       Task: Create a "Master-Class Operational Manual" for: "${plant}" in "${region}, ${country}" (${env}, ${system}).
       Output Language: ${targetLang} ONLY.
 
-      **INSTRUCTION FOR EXTREME DETAIL (Must mimic a textbook/manual):**
-      1.  **LENGTH:** Do NOT summarize. Write full paragraphs where necessary.
-      2.  **RECIPES:** Provide exact ingredients, weights (grams/kg), volumes (liters), and fermentation times (days).
-      3.  **STEPS:** Use numbered lists (1., 2., 3.) for every procedure.
-      4.  **DISEASE:** If an image is provided, diagnose it. If not, predict the most likely disease. **PROVIDE 5-STEP TREATMENT PLAN.**
+      **ADDITIONAL REQUEST:** Estimate current market price, typical weather now, and soil stats for the Marquee.
 
-      **MANDATORY SECTIONS:**
-      - **Soil Adjustment:** How to fix pH? How much lime/sulfur per sq.m.? How to fix clay/sand?
-      - **Organic Wisdom:** Recipe for FPJ, IMO, or Compost. Ratio (e.g. 1:3:10).
-      - **Disease Treatment:** 1. Sanitation (How?)
-          2. Environment (Airflow/Water)
-          3. Biological Control (Trichoderma/Bacillus?)
-          4. Organic Chemical (Copper/Neem?)
-          5. Future Prevention.
-      - **Deep Propagation:** Seed soaking temp/time. Cutting angle. Rooting hormone usage.
-      - **Timeline:** Weekly breakdown with "Observation Points".
+      **MANDATORY SECTIONS (Detailed):**
+      - **Soil Adjustment:** How to fix pH? How much lime/sulfur per sq.m.?
+      - **Organic Wisdom:** Recipe for FPJ, IMO, or Compost (Ratio 1:3:10).
+      - **Disease Treatment:** 5-Step Treatment Plan (Sanitation -> Prevention).
+      - **Deep Propagation:** Seed soaking temp/time.
+      - **Timeline:** Weekly breakdown.
 
       JSON Schema (Strict):
       {
-          "feasibility_check": { "is_possible": boolean, "status_title": "string", "reason": "string (Long detailed explanation)" },
+          "feasibility_check": { "is_possible": boolean, "status_title": "string", "reason": "string" },
           "vital_stats": { "ideal_temp": "string", "ideal_humidity": "string", "ideal_ph": "string", "soil_type": "string", "sun_requirement": "string" },
-          
-          "soil_adjustment_detailed": "string (VERY DETAILED: How to test and fix soil problems step-by-step)",
-          "soil_composition": { 
-              "primary_mix": "string (Exact Ratio e.g. Soil 2 : Leaf Compost 1 : Sand 1)", 
-              "amendments": "string (List specific items like Dolomite, Perlite)", 
-              "layering": "string" 
-          },
-          
-          "fertilizer_guide": { 
-              "veg_stage_npk": "string", 
-              "flower_stage_npk": "string", 
-              "organic_recipe": "string (FULL RECIPE: Ingredients, Ratios, Fermentation Time, Usage)", 
-              "application_frequency": "string" 
-          },
-          
-          "organic_wisdom": { 
-              "soil_prep": "string (Traditional Double-Digging or Solarization method details)", 
-              "fertilizer_recipe": "string (Alternative bio-fertilizer recipe with exact steps)", 
-              "pest_control_recipe": "string (Herbal spray recipe: Ingredients like Galangal, Neem, Molasses + Ratios)", 
-              "microorganism_technique": "string (How to make IMO or PSB step-by-step)" 
-          },
-          
-          "disease_treatment": { 
-              "detected": boolean, 
-              "name": "string (Scientific Name if possible)", 
-              "cause": "string", 
-              "steps": ["string (Step 1: Sanitation...)", "string (Step 2: Environment...)", "string (Step 3: Biological...)", "string (Step 4: Chemical...)", "string (Step 5: Prevention...)"] 
-          },
-          
-          "deep_propagation": { 
-              "seed_treatment": "string (Detailed: Water temp, soaking hours, scarification)", 
-              "propagation_source": "string", 
-              "special_technique": "string (Detailed technique)", 
-              "step_by_step": "string (1. Prepare... 2. Cut... 3. Apply... 4. Wait...)" 
-          },
-          
-          "action_timeline": [ 
-             { "period": "string", "action": "string", "formula": "string", "benefit": "string", "checkpoint": "string" } 
-          ],
-          
+          "soil_composition": { "primary_mix": "string", "amendments": "string", "layering": "string" },
+          "fertilizer_guide": { "veg_stage_npk": "string", "flower_stage_npk": "string", "organic_recipe": "string", "application_frequency": "string" },
+          "organic_wisdom": { "soil_prep": "string", "fertilizer_recipe": "string", "pest_control_recipe": "string", "microorganism_technique": "string" },
+          "disease_treatment": { "detected": boolean, "name": "string", "cause": "string", "steps": ["string"] },
+          "deep_propagation": { "seed_treatment": "string", "propagation_source": "string", "special_technique": "string", "step_by_step": "string" },
+          "action_timeline": [ { "period": "string", "action": "string", "formula": "string", "benefit": "string", "checkpoint": "string" } ],
           "resilience_profile": { "drought": {"level":"","advice":""}, "flood": {"level":"","advice":""}, "sun": {"level":"","advice":""} },
           "transplant_advice": { "needed": boolean, "trigger": "string", "method": "string" },
           "env_summary": { "temp": "string", "light": "string" },
-          "soil_summary": "string"
+          "soil_summary": "string",
+          "soil_adjustment_detailed": "string",
+          "real_time_data": {
+              "market_price": "string (e.g. 150-200 THB/kg)",
+              "weather_now": "string (e.g. 32°C, 70% Humidity)",
+              "soil_insight": "string (e.g. Sandy Loam, pH 6.0)"
+          }
       }
     `;
   };
@@ -380,7 +356,7 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-[#f8fafc] font-sans flex flex-col">
+    <div className="min-h-screen bg-[#0f172a] text-[#f8fafc] font-sans flex flex-col pb-12">
       <nav className="bg-[#1e293b] border-b border-slate-700 sticky top-0 z-50 p-4 no-print shadow-md">
          <div className="max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -444,15 +420,13 @@ const App: React.FC = () => {
                    {/* 2. Vital Stats */}
                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">{Object.entries(result.vital_stats).map(([k,v]) => (<div key={k} className="bg-[#1e293b] p-4 rounded-xl border border-slate-700 text-center shadow-lg"><div className="text-[10px] text-slate-400 uppercase mb-1">{k.replace('ideal_','').replace('_',' ')}</div><div className="font-bold text-slate-200 text-sm">{v}</div></div>))}</div>
                    
-                   {/* 3. Soil Adjustment & Mix (Detailed) */}
+                   {/* 3. Soil Adjustment (Detailed) */}
                    <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/30 p-6 rounded-xl border border-amber-500/30 shadow-lg">
                       <h3 className="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2"><i className="fa-solid fa-trowel"></i> {t.soilAdj}</h3>
-                      <div className="space-y-4">
-                         <div className="bg-black/20 p-4 rounded-lg border border-amber-500/10"><p className="text-slate-200 text-sm leading-relaxed whitespace-pre-line">{result.soil_adjustment_detailed}</p></div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-black/20 p-3 rounded-lg"><span className="text-xs text-amber-200 font-bold block mb-1">Primary Mix Ratio</span><span className="text-sm text-slate-200">{result.soil_composition.primary_mix}</span></div>
-                            <div className="bg-black/20 p-3 rounded-lg"><span className="text-xs text-amber-200 font-bold block mb-1">Amendments</span><span className="text-sm text-slate-200">{result.soil_composition.amendments}</span></div>
-                         </div>
+                      <div className="bg-black/20 p-4 rounded-lg border border-amber-500/10 mb-4"><p className="text-slate-200 text-sm leading-relaxed whitespace-pre-line">{result.soil_adjustment_detailed}</p></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div className="bg-black/20 p-3 rounded-lg"><span className="text-xs text-amber-200 font-bold block mb-1">Primary Mix Ratio</span><span className="text-sm text-slate-200">{result.soil_composition.primary_mix}</span></div>
+                         <div className="bg-black/20 p-3 rounded-lg"><span className="text-xs text-amber-200 font-bold block mb-1">Amendments</span><span className="text-sm text-slate-200">{result.soil_composition.amendments}</span></div>
                       </div>
                    </div>
 
@@ -512,6 +486,21 @@ const App: React.FC = () => {
          )}
       </main>
 
+      {/* Marquee Footer */}
+      {view === 'app' && result && result.real_time_data && (
+          <div className="fixed bottom-0 left-0 w-full bg-black/90 text-green-400 py-2 border-t border-green-500/30 z-50 overflow-hidden whitespace-nowrap shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+              <div className="animate-marquee inline-block text-sm font-mono">
+                  <span className="mx-4"><i className="fa-solid fa-tag"></i> {t.market}: {result.real_time_data.market_price}</span>
+                  <span className="mx-4 text-slate-500">|</span>
+                  <span className="mx-4"><i className="fa-solid fa-cloud-sun"></i> {t.weather} ({region}): {result.real_time_data.weather_now}</span>
+                  <span className="mx-4 text-slate-500">|</span>
+                  <span className="mx-4"><i className="fa-solid fa-layer-group"></i> {t.soilInfo}: {result.real_time_data.soil_insight}</span>
+                  <span className="mx-4 text-slate-500">|</span>
+                  <span className="mx-4 text-xs text-slate-400">(Data estimated by Yanapanya AI)</span>
+              </div>
+          </div>
+      )}
+
       {/* QR Code Modal */}
       {showQR && (
          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-sm" onClick={()=>setShowQR(false)}>
@@ -527,6 +516,9 @@ const App: React.FC = () => {
          @media print { .no-print { display: none !important; } body { background: white; color: black; } .bg-[#0f172a], .bg-[#1e293b] { background: white !important; color: black !important; border: 1px solid #ddd; } .text-slate-300, .text-slate-400, .text-white { color: #333 !important; } h1, h2, h3, h4 { color: black !important; } .shadow-xl, .shadow-lg { box-shadow: none !important; } }
          .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; } @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
          .whitespace-pre-line { white-space: pre-line; }
+         @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+         .animate-marquee { animation: marquee 20s linear infinite; }
+         .animate-marquee:hover { animation-play-state: paused; }
       `}</style>
     </div>
   );
