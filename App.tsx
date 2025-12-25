@@ -183,7 +183,7 @@ const translations = {
   }
 };
 
-const API_URL = 'http://agri-app-kih4.onrender.com/api';
+const API_URL = 'https://agri-app-kih4.onrender.com/api';
 
 const App: React.FC = () => {
   // --- State ---
