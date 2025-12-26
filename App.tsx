@@ -183,7 +183,7 @@ const translations = {
   }
 };
 
-const API_URL = 'https://agri-app-1.onrender.com/api';
+const API_URL = '/api';
 
 const App: React.FC = () => {
   // --- State ---
