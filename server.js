@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const SECRET_KEY = "my_super_secret_key_change_this"; // กุญแจลับสำหรับ Login
 
 // ตั้งค่า AI (อย่าลืมใส่ GEMINI_API_KEY ในไฟล์ .env ของคุณนะ!)
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Middleware
 app.use(cors());
